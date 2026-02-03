@@ -1,11 +1,20 @@
 // api/chat.js
 import cors from 'cors';
-import express from 'express';
 import axios from 'axios';
 
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+const corsMiddleware = cors({
+  origin: [
+    'https://voice-agent-frontend-alpha.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',     // common Vite dev port
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false,
+  maxAge: 86400
+});
 
 const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || `You are Jess from Omni Mortgage, a helpful agent assisting with mortgage inquiries. Engage the user in a natural conversation about obtaining a home loan. Ask relevant questions one at a time, such as:
 - If they're looking to refinance or get a new loan.
@@ -35,8 +44,14 @@ async function callXAIChat(payload) {
 }
 
 export default async function handler(req, res) {
+  // Apply CORS
+  await new Promise((resolve) => corsMiddleware(req, res, resolve));
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
@@ -66,12 +81,11 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('chat error:', err);
     const status = err?.response?.status || 500;
-    const errorMsg = err?.response?.data || err.message || 'Internal Server Error';
+    const errorMsg = err?.response?.data?.error?.message || err.message || 'Internal Server Error';
     return res.status(status).json({ error: errorMsg });
   }
 }
 
-// Optional: needed for Vercel to recognize this as an API route with body parsing
 export const config = {
   api: {
     bodyParser: {
